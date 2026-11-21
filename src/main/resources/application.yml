@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: GameStats AI - RAG para Videojuegos
+
+  datasource:
+    # stringtype=unspecified: permite guardar el embedding (String) en la columna vector(768)
+    url: jdbc:postgresql://localhost:5440/gamestats_rag?stringtype=unspecified
+    username: admin
+    password: admin123
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none   # Flyway administra el esquema de la base de datos
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+
+# Configuracion JWT (JSON Web Token para autenticacion)
+jwt:
+  secret: "clave-secreta-muy-larga-para-gamestats-rag-2024-videojuegos-rag-system"
+  expiration: 86400000  # 24 horas en milisegundos
+
+# Configuracion de Ollama (IA que corre localmente)
+ollama:
+  base-url: http://localhost:11434
+  embedding-model: nomic-embed-text   # Modelo para convertir texto a vectores
+  llm-model: llama3.2:3b              # Modelo de lenguaje para generar respuestas
+
+# Configuracion de la aplicacion
+app:
+  upload:
+    temp-dir: ./temp-uploads           # Carpeta temporal para PDFs (se eliminan despues)
+    max-file-size: 20971520            # 20MB en bytes
+  chunking:
+    chunk-size: 700                    # Palabras por fragmento
+    chunk-overlap: 100                 # Palabras de solapamiento entre fragmentos
+  rag:
+    top-k: 5                           # Cuantos fragmentos recuperar por consulta
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.gamestats: INFO
+    org.springframework.security: WARN

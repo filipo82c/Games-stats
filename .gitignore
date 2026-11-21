@@ -1,0 +1,7 @@
+target/
+temp-uploads/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
