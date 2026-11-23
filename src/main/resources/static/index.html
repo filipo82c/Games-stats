@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GameStats AI — Pregúntale a tus documentos de videojuegos</title>
+  <meta name="description" content="GameStats AI: sistema RAG que indexa PDFs de videojuegos (patch notes, guías, lore) y responde preguntas con citas usando IA local.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: hsl(240 25% 6%);
+      --panel: hsl(240 20% 11% / .72);
+      --border: hsl(260 40% 60% / .18);
+      --text: hsl(240 20% 94%);
+      --muted: hsl(240 10% 65%);
+      --accent: hsl(268 90% 66%);
+      --accent2: hsl(188 95% 55%);
+      --ok: hsl(150 70% 50%);
+      --warn: hsl(40 95% 60%);
+      --err: hsl(350 85% 62%);
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', system-ui, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden;
+    }
+    body::before, body::after {
+      content: ""; position: fixed; width: 60vmax; height: 60vmax; border-radius: 50%;
+      filter: blur(120px); opacity: .28; z-index: -1; animation: float 18s ease-in-out infinite alternate;
+    }
+    body::before { background: var(--accent); top: -25vmax; left: -15vmax; }
+    body::after { background: var(--accent2); bottom: -30vmax; right: -20vmax; animation-delay: -9s; }
+    @keyframes float { to { transform: translate(8vmax, 6vmax) scale(1.1); } }
+
+    .grad { background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .glass { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+    button, .btn {
+      font: inherit; font-weight: 600; border: 0; cursor: pointer; border-radius: 12px; padding: .8rem 1.3rem; color: white;
+      background: linear-gradient(135deg, var(--accent), hsl(250 85% 58%));
+      box-shadow: 0 6px 24px hsl(268 90% 60% / .35); transition: transform .15s, box-shadow .2s, opacity .2s;
+    }
+    button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 30px hsl(268 90% 60% / .5); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); box-shadow: none; color: var(--muted); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+    input, textarea {
+      font: inherit; width: 100%; padding: .85rem 1rem; border-radius: 12px; color: var(--text);
+      background: hsl(240 25% 8% / .8); border: 1px solid var(--border); outline: none; transition: border-color .2s, box-shadow .2s;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px hsl(268 90% 66% / .2); }
+    label { font-size: .85rem; color: var(--muted); display: block; margin-bottom: .35rem; }
+    .hidden { display: none !important; }
+
+    /* ---------- AUTH ---------- */
+    #auth-view { min-height: 100vh; display: grid; place-items: center; padding: 2rem; }
+    .auth-card { width: min(440px, 100%); padding: 2.5rem; animation: rise .6s ease; }
+    @keyframes rise { from { opacity: 0; transform: translateY(20px); } }
+    .logo { font-size: 2.4rem; font-weight: 800; letter-spacing: -.02em; }
+    .tagline { color: var(--muted); margin: .4rem 0 2rem; }
+    .tabs { display: flex; gap: .4rem; background: hsl(240 25% 8%); padding: .3rem; border-radius: 12px; margin-bottom: 1.5rem; }
+    .tabs button { flex: 1; background: transparent; box-shadow: none; color: var(--muted); padding: .6rem; }
+    .tabs button.active { background: hsl(268 60% 40% / .5); color: var(--text); }
+    .field { margin-bottom: 1rem; }
+    .auth-card form button[type=submit] { width: 100%; margin-top: .5rem; }
+    .msg { margin-top: 1rem; font-size: .9rem; min-height: 1.2em; }
+    .msg.err { color: var(--err); } .msg.ok { color: var(--ok); }
+
+    /* ---------- APP ---------- */
+    header { display: flex; align-items: center; justify-content: space-between; padding: 1.1rem 2rem; position: sticky; top: 0; z-index: 5;
+      backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); background: hsl(240 25% 6% / .6); }
+    header .logo { font-size: 1.5rem; }
+    .user-chip { display: flex; align-items: center; gap: 1rem; color: var(--muted); }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: white;
+      background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+    main { display: grid; grid-template-columns: 380px 1fr; gap: 1.5rem; padding: 1.5rem 2rem; max-width: 1400px; margin: auto; }
+    @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+    .panel { padding: 1.5rem; }
+    .panel h2 { font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: .5rem; }
+
+    .dropzone { border: 2px dashed var(--border); border-radius: 14px; padding: 1.8rem 1rem; text-align: center; cursor: pointer; transition: .2s; margin-bottom: 1rem; }
+    .dropzone:hover, .dropzone.drag { border-color: var(--accent2); background: hsl(188 95% 55% / .06); }
+    .dropzone .icon { font-size: 2rem; }
+    .dropzone small { color: var(--muted); display: block; margin-top: .3rem; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin-bottom: 1rem; }
+    #upload-btn { width: 100%; }
+
+    .doc-list { list-style: none; margin-top: 1.5rem; display: flex; flex-direction: column; gap: .6rem; max-height: 46vh; overflow-y: auto; }
+    .doc { padding: .9rem 1rem; border-radius: 12px; border: 1px solid var(--border); background: hsl(240 25% 8% / .6);
+      display: flex; justify-content: space-between; gap: .6rem; align-items: center; animation: rise .3s ease; }
+    .doc-name { font-weight: 600; font-size: .95rem; word-break: break-word; }
+    .doc-meta { font-size: .78rem; color: var(--muted); margin-top: .2rem; }
+    .badge { font-size: .7rem; font-weight: 700; padding: .25rem .55rem; border-radius: 99px; letter-spacing: .03em; white-space: nowrap; }
+    .badge.READY { background: hsl(150 70% 50% / .15); color: var(--ok); }
+    .badge.PROCESSING { background: hsl(40 95% 60% / .15); color: var(--warn); animation: pulse 1.4s infinite; }
+    .badge.ERROR { background: hsl(350 85% 62% / .15); color: var(--err); }
+    @keyframes pulse { 50% { opacity: .45; } }
+    .del { background: transparent; box-shadow: none; padding: .3rem .5rem; color: var(--muted); font-size: 1rem; }
+    .del:hover { color: var(--err); transform: none; box-shadow: none; }
+    .empty { color: var(--muted); font-size: .9rem; text-align: center; padding: 1rem; }
+
+    .chat { display: flex; flex-direction: column; height: calc(100vh - 120px); min-height: 520px; }
+    .messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; padding-right: .3rem; }
+    .welcome { margin: auto; text-align: center; max-width: 520px; color: var(--muted); }
+    .welcome h3 { font-size: 1.6rem; color: var(--text); margin-bottom: .5rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; margin-top: 1.2rem; }
+    .chip { background: hsl(240 25% 12%); border: 1px solid var(--border); box-shadow: none; font-weight: 500; font-size: .85rem; color: var(--text); padding: .5rem .9rem; }
+    .chip:hover { border-color: var(--accent2); box-shadow: none; }
+    .bubble { max-width: 85%; padding: 1rem 1.2rem; border-radius: 16px; line-height: 1.6; animation: rise .3s ease; white-space: pre-wrap; }
+    .bubble.user { align-self: flex-end; background: linear-gradient(135deg, hsl(268 70% 45%), hsl(250 70% 42%)); border-bottom-right-radius: 4px; }
+    .bubble.ai { align-self: flex-start; background: hsl(240 22% 13%); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .bubble.ai .cite { color: var(--accent2); font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: .85em; }
+    .time { font-size: .72rem; color: var(--muted); margin-top: .6rem; }
+    .sources { margin-top: .9rem; display: flex; flex-direction: column; gap: .45rem; white-space: normal; }
+    .sources summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+    .source { font-size: .82rem; padding: .6rem .8rem; border-radius: 10px; background: hsl(240 25% 8%); border-left: 3px solid var(--accent2); margin-top: .45rem; }
+    .source b { color: var(--accent2); font-family: 'JetBrains Mono', monospace; }
+    .source p { color: var(--muted); margin-top: .3rem; }
+    .typing { display: inline-flex; gap: 5px; }
+    .typing span { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); animation: bounce 1s infinite; }
+    .typing span:nth-child(2) { animation-delay: .15s; } .typing span:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce { 50% { transform: translateY(-6px); opacity: .5; } }
+    .ask { display: flex; gap: .7rem; margin-top: 1rem; }
+    .ask textarea { resize: none; height: 54px; }
+
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: .9rem 1.2rem; border-radius: 12px; z-index: 50; animation: rise .3s; max-width: 360px; }
+    .toast.err { border-color: var(--err); } .toast.ok { border-color: var(--ok); }
+  </style>
+</head>
+<body>
+
+<!-- ================= LOGIN / REGISTRO ================= -->
+<section id="auth-view">
+  <div class="auth-card glass">
+    <h1 class="logo"><span class="grad">GameStats</span> AI</h1>
+    <p class="tagline">Sube PDFs de tus videojuegos y pregúntale a la IA. Respuestas con citas, 100% local.</p>
+    <div class="tabs">
+      <button id="tab-login" class="active" type="button">Iniciar sesión</button>
+      <button id="tab-register" type="button">Registrarse</button>
+    </div>
+    <form id="auth-form">
+      <div class="field"><label for="username">Usuario</label><input id="username" required autocomplete="username"></div>
+      <div class="field hidden" id="email-field"><label for="email">Email</label><input id="email" type="email" autocomplete="email"></div>
+      <div class="field"><label for="password">Contraseña</label><input id="password" type="password" required autocomplete="current-password"></div>
+      <button type="submit" id="auth-submit">Entrar</button>
+      <p class="msg" id="auth-msg"></p>
+    </form>
+  </div>
+</section>
+
+<!-- ================= APLICACIÓN ================= -->
+<section id="app-view" class="hidden">
+  <header>
+    <div class="logo"><span class="grad">GameStats</span> AI</div>
+    <div class="user-chip">
+      <div class="avatar" id="avatar">?</div>
+      <span id="user-name"></span>
+      <button class="btn-ghost" id="logout-btn" type="button">Salir</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Documentos -->
+    <aside class="panel glass">
+      <h2>📚 Mis documentos</h2>
+      <div class="dropzone" id="dropzone">
+        <div class="icon">🎮</div>
+        <div id="drop-text">Arrastra un PDF o haz clic</div>
+        <small>Patch notes, guías, lore, estadísticas · máx 20MB</small>
+        <input type="file" id="file-input" accept="application/pdf" hidden>
+      </div>
+      <div class="row">
+        <input id="doc-name" placeholder="Nombre (opcional)">
+        <input id="game-name" placeholder="Juego (ej: Valorant)">
+      </div>
+      <button id="upload-btn" type="button" disabled>Subir e indexar</button>
+      <ul class="doc-list" id="doc-list"></ul>
+    </aside>
+
+    <!-- Chat RAG -->
+    <section class="panel glass chat">
+      <h2>💬 Pregúntale a tus documentos</h2>
+      <div class="messages" id="messages">
+        <div class="welcome" id="welcome">
+          <h3>¿Qué quieres saber?</h3>
+          <p>La IA buscará en tus PDFs los fragmentos más relevantes y responderá citando la fuente.</p>
+          <div class="chips">
+            <button class="chip" type="button">¿Qué personajes recibieron nerfs?</button>
+            <button class="chip" type="button">Resume los cambios del último parche</button>
+            <button class="chip" type="button">¿Cuál es el arma con más daño?</button>
+          </div>
+        </div>
+      </div>
+      <form class="ask" id="ask-form">
+        <textarea id="question" placeholder="Escribe tu pregunta… (Enter para enviar)" maxlength="1000"></textarea>
+        <button type="submit" id="ask-btn">Preguntar</button>
+      </form>
+    </section>
+  </main>
+</section>
+
+<script>
+  // Si el HTML se abre desde Spring usa el mismo origen; si se abre como archivo usa localhost:8080
+  const API = location.protocol.startsWith('http') ? '' : 'http://localhost:8080';
+  const $ = (id) => document.getElementById(id);
+  let mode = 'login';
+  let selectedFile = null;
+  let pollTimer = null;
+
+  // ---------- Utilidades ----------
+  const token = () => localStorage.getItem('token');
+  async function api(path, opts = {}) {
+    const headers = opts.headers || {};
+    if (token()) headers['Authorization'] = 'Bearer ' + token();
+    if (opts.body && !(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+    const res = await fetch(API + path, { ...opts, headers });
+    if (res.status === 401 && token()) { logout(); throw new Error('Sesión expirada'); }
+    if (res.status === 204) return null;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Error ' + res.status);
+    return data;
+  }
+  function toast(text, type = 'ok') {
+    const t = document.createElement('div');
+    t.className = 'toast glass ' + type; t.textContent = text;
+    document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+  }
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // ---------- Autenticación ----------
+  function setMode(m) {
+    mode = m;
+    $('tab-login').classList.toggle('active', m === 'login');
+    $('tab-register').classList.toggle('active', m === 'register');
+    $('email-field').classList.toggle('hidden', m === 'login');
+    $('email').required = m === 'register';
+    $('auth-submit').textContent = m === 'login' ? 'Entrar' : 'Crear cuenta';
+    $('auth-msg').textContent = '';
+  }
+  $('tab-login').onclick = () => setMode('login');
+  $('tab-register').onclick = () => setMode('register');
+
+  $('auth-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const body = { username: $('username').value.trim(), password: $('password').value };
+    if (mode === 'register') body.email = $('email').value.trim();
+    $('auth-submit').disabled = true;
+    try {
+      const data = await api('/api/auth/' + mode, { method: 'POST', body: JSON.stringify(body) });
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('username', data.username);
+      showApp();
+    } catch (err) {
+      $('auth-msg').className = 'msg err'; $('auth-msg').textContent = err.message;
+    } finally { $('auth-submit').disabled = false; }
+  };
+
+  function logout() {
+    localStorage.clear(); clearInterval(pollTimer);
+    $('app-view').classList.add('hidden'); $('auth-view').classList.remove('hidden');
+  }
+  $('logout-btn').onclick = logout;
+
+  function showApp() {
+    const name = localStorage.getItem('username');
+    $('user-name').textContent = name;
+    $('avatar').textContent = name[0].toUpperCase();
+    $('auth-view').classList.add('hidden'); $('app-view').classList.remove('hidden');
+    loadDocs();
+  }
+
+  // ---------- Documentos ----------
+  function pickFile(f) {
+    if (!f) return;
+    if (!f.name.toLowerCase().endsWith('.pdf')) return toast('Solo se permiten PDF', 'err');
+    selectedFile = f;
+    $('drop-text').textContent = '📄 ' + f.name;
+    $('upload-btn').disabled = false;
+  }
+  const dz = $('dropzone');
+  dz.onclick = () => $('file-input').click();
+  $('file-input').onchange = (e) => pickFile(e.target.files[0]);
+  dz.ondragover = (e) => { e.preventDefault(); dz.classList.add('drag'); };
+  dz.ondragleave = () => dz.classList.remove('drag');
+  dz.ondrop = (e) => { e.preventDefault(); dz.classList.remove('drag'); pickFile(e.dataTransfer.files[0]); };
+
+  $('upload-btn').onclick = async () => {
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    fd.append('name', $('doc-name').value);
+    fd.append('gameName', $('game-name').value);
+    $('upload-btn').disabled = true; $('upload-btn').textContent = 'Subiendo…';
+    try {
+      await api('/api/documents', { method: 'POST', body: fd });
+      toast('PDF recibido. Indexando en segundo plano…');
+      selectedFile = null; $('file-input').value = ''; $('doc-name').value = ''; $('game-name').value = '';
+      $('drop-text').textContent = 'Arrastra un PDF o haz clic';
+      loadDocs();
+    } catch (err) { toast(err.message, 'err'); $('upload-btn').disabled = false; }
+    finally { $('upload-btn').textContent = 'Subir e indexar'; }
+  };
+
+  async function loadDocs() {
+    try {
+      const docs = await api('/api/documents');
+      const list = $('doc-list');
+      list.innerHTML = docs.length ? '' : '<li class="empty">Aún no subes documentos.</li>';
+      for (const d of docs) {
+        const li = document.createElement('li');
+        li.className = 'doc';
+        const meta = d.status === 'READY' ? `${d.totalPages} págs · ${d.totalChunks} fragmentos`
+                   : d.status === 'ERROR' ? esc(d.errorMessage) : 'Generando embeddings…';
+        li.innerHTML = `<div><div class="doc-name">${esc(d.name)}</div>
+            <div class="doc-meta">${d.gameName ? '🎮 ' + esc(d.gameName) + ' · ' : ''}${meta}</div></div>
+          <div style="display:flex;align-items:center;gap:.3rem">
+            <span class="badge ${d.status}">${{ READY: 'LISTO', PROCESSING: 'PROCESANDO', ERROR: 'ERROR' }[d.status]}</span>
+            <button class="del" title="Eliminar" type="button">✕</button></div>`;
+        li.querySelector('.del').onclick = async () => {
+          if (!confirm('¿Eliminar "' + d.name + '"?')) return;
+          await api('/api/documents/' + d.id, { method: 'DELETE' }).catch(e => toast(e.message, 'err'));
+          loadDocs();
+        };
+        list.appendChild(li);
+      }
+      // Mientras haya documentos procesando, refrescar cada 3 segundos
+      clearInterval(pollTimer);
+      if (docs.some(d => d.status === 'PROCESSING')) pollTimer = setInterval(loadDocs, 3000);
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  // ---------- Chat RAG ----------
+  function addBubble(cls, html) {
+    $('welcome')?.remove();
+    const b = document.createElement('div');
+    b.className = 'bubble ' + cls; b.innerHTML = html;
+    $('messages').appendChild(b); $('messages').scrollTop = $('messages').scrollHeight;
+    return b;
+  }
+
+  async function ask(question) {
+    if (!question.trim()) return;
+    addBubble('user', esc(question));
+    const wait = addBubble('ai', '<span class="typing"><span></span><span></span><span></span></span>');
+    $('ask-btn').disabled = true;
+    try {
+      const r = await api('/api/query', { method: 'POST', body: JSON.stringify({ question }) });
+      const answer = esc(r.answer).replace(/\[(\d+)\]/g, '<span class="cite">[$1]</span>');
+      const sources = r.sources.length ? `<details class="sources"><summary>📎 ${r.sources.length} fuentes consultadas</summary>
+        ${r.sources.map(s => `<div class="source"><b>[${s.number}]</b> ${esc(s.documentName)}${s.gameName ? ' · ' + esc(s.gameName) : ''} · pág. ${s.pageNumber}
+        <p>${esc(s.excerpt)}</p></div>`).join('')}</details>` : '';
+      wait.innerHTML = answer + sources + `<div class="time">⚡ ${(r.responseTimeMs / 1000).toFixed(1)} s</div>`;
+    } catch (err) {
+      wait.innerHTML = '<span style="color:var(--err)">⚠ ' + esc(err.message) + '</span>';
+    } finally { $('ask-btn').disabled = false; $('messages').scrollTop = $('messages').scrollHeight; }
+  }
+
+  $('ask-form').onsubmit = (e) => { e.preventDefault(); const q = $('question').value; $('question').value = ''; ask(q); };
+  $('question').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('ask-form').requestSubmit(); } };
+  document.querySelectorAll('.chip').forEach(c => c.onclick = () => ask(c.textContent));
+
+  // Si ya hay sesión guardada, entrar directo
+  if (token()) showApp();
+</script>
+</body>
+</html>
