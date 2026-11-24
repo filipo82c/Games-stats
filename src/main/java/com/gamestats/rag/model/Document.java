@@ -37,6 +37,12 @@ public class Document {
     @Column(name = "game_name", length = 100)
     private String gameName;  // Nombre del videojuego (opcional, para organizacion)
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "juego_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Juego juego;  // Juego al que pertenece (opcional)
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private DocumentStatus status;  // Estado del procesamiento
