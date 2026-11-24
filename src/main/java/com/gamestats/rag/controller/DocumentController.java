@@ -30,10 +30,11 @@ public class DocumentController {
     public ResponseEntity<DocumentResponse> upload(@RequestParam("file") MultipartFile file,
                                                    @RequestParam(value = "name", required = false) String name,
                                                    @RequestParam(value = "gameName", required = false) String gameName,
+                                                   @RequestParam(value = "juegoId", required = false) Long juegoId,
                                                    @AuthenticationPrincipal User user) throws IOException {
         // 202 ACCEPTED: recibido, se procesa en segundo plano
         return ResponseEntity.status(HttpStatus.ACCEPTED)
-                .body(documentService.upload(file, name, gameName, user));
+                .body(documentService.upload(file, name, gameName, juegoId, user));
     }
 
     @GetMapping

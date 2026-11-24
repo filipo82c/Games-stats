@@ -3,11 +3,14 @@ package com.gamestats.rag.service;
 import com.gamestats.rag.dto.DocumentResponse;
 import com.gamestats.rag.model.Document;
 import com.gamestats.rag.model.DocumentStatus;
+import com.gamestats.rag.model.Juego;
 import com.gamestats.rag.model.User;
 import com.gamestats.rag.repository.DocumentRepository;
+import com.gamestats.rag.repository.JuegoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -29,6 +32,7 @@ import java.util.UUID;
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
+    private final JuegoRepository juegoRepository;
     private final PdfProcessorService pdfProcessorService;
 
     @Value("${app.upload.temp-dir}")
@@ -37,12 +41,25 @@ public class DocumentService {
     @Value("${app.upload.max-file-size}")
     private long maxFileSize;
 
-    public DocumentResponse upload(MultipartFile file, String name, String gameName, User user) throws IOException {
+    public DocumentResponse upload(MultipartFile file, String name, String gameName, Long juegoId, User user) throws IOException {
         // Validaciones
         if (file == null || file.isEmpty()) throw new IllegalArgumentException("Debes seleccionar un archivo");
         if (file.getSize() > maxFileSize) throw new IllegalArgumentException("El archivo supera los 20MB");
         String filename = file.getOriginalFilename() == null ? "documento.pdf" : file.getOriginalFilename();
         if (!filename.toLowerCase().endsWith(".pdf")) throw new IllegalArgumentException("Solo se permiten archivos PDF");
+
+        // Resolver juego opcional (por ID o por nombre si ya existe)
+        Juego juego = null;
+        String resolvedGameName = (gameName == null || gameName.isBlank()) ? null : gameName.trim();
+        if (juegoId != null) {
+            juego = juegoRepository.findById(juegoId)
+                    .orElseThrow(() -> new IllegalArgumentException("Juego no encontrado"));
+            if (resolvedGameName == null) {
+                resolvedGameName = juego.getNombre();
+            }
+        } else if (resolvedGameName != null) {
+            juego = juegoRepository.findByNombreIgnoreCase(resolvedGameName).orElse(null);
+        }
 
         // Guardar temporalmente y calcular hash SHA-256
         Path dir = Path.of(tempDir);
@@ -56,7 +73,8 @@ public class DocumentService {
                 .user(user)
                 .name(name == null || name.isBlank() ? filename : name)
                 .originalFilename(filename)
-                .gameName(gameName == null || gameName.isBlank() ? null : gameName)
+                .gameName(resolvedGameName)
+                .juego(juego)
                 .fileHash(sha256(temp))
                 .status(DocumentStatus.PROCESSING)
                 .build());
@@ -66,6 +84,7 @@ public class DocumentService {
         return DocumentResponse.from(doc);
     }
 
+    @Transactional(readOnly = true)
     public List<DocumentResponse> list(User user) {
         return documentRepository.findByUserOrderByCreatedAtDesc(user).stream()
                 .map(DocumentResponse::from)

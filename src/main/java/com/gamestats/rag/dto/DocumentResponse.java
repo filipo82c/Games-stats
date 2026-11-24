@@ -10,6 +10,7 @@ public record DocumentResponse(
         String name,
         String originalFilename,
         String gameName,
+        Long juegoId,
         String status,
         Integer totalChunks,
         Integer totalPages,
@@ -17,8 +18,9 @@ public record DocumentResponse(
         LocalDateTime createdAt
 ) {
     public static DocumentResponse from(Document d) {
+        Long juegoId = d.getJuego() != null ? d.getJuego().getId() : null;
         return new DocumentResponse(
-                d.getId(), d.getName(), d.getOriginalFilename(), d.getGameName(),
+                d.getId(), d.getName(), d.getOriginalFilename(), d.getGameName(), juegoId,
                 d.getStatus().name(), d.getTotalChunks(), d.getTotalPages(),
                 d.getErrorMessage(), d.getCreatedAt());
     }
