@@ -7,6 +7,9 @@ import java.util.List;
  * de donde saco la informacion.
  */
 public record QueryResponse(
+        Long consultaId,
+        Long respuestaId,
+        String estado,
         String question,
         String answer,
         List<Source> sources,
@@ -19,6 +22,7 @@ public record QueryResponse(
             String documentName,
             String gameName,
             Integer pageNumber,
-            String excerpt
+            String excerpt,
+            Double similarity
     ) {}
 }

@@ -39,6 +39,27 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
             @Param("limit") int limit
     );
 
+    /**
+     * Igual que findSimilarChunks, pero devuelve pares [chunk_id, similitud_coseno].
+     * En pgvector <=> es distancia coseno (0 = identico), asi que similitud = 1 - distancia.
+     */
+    @Query(value = """
+            SELECT id, (1 - (embedding <=> CAST(:queryEmbedding AS vector))) AS similitud
+            FROM document_chunks
+            WHERE user_id = :userId
+            ORDER BY embedding <=> CAST(:queryEmbedding AS vector)
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Object[]> findSimilarChunkIdsWithSimilarity(
+            @Param("userId") Long userId,
+            @Param("queryEmbedding") String queryEmbedding,
+            @Param("limit") int limit
+    );
+
+    // Carga los fragmentos junto con su documento en una sola consulta (evita LazyInitializationException)
+    @Query("SELECT c FROM DocumentChunk c JOIN FETCH c.document WHERE c.id IN :ids")
+    List<DocumentChunk> findAllByIdWithDocument(@Param("ids") List<Long> ids);
+
     // Contar los fragmentos de un documento (para estadisticas)
     long countByDocumentId(Long documentId);
 
