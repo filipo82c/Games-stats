@@ -2,6 +2,7 @@ package com.gamestats.rag.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -22,6 +23,11 @@ public class GlobalExceptionHandler {
         String msg = e.getBindingResult().getFieldErrors().stream()
                 .findFirst().map(f -> f.getDefaultMessage()).orElse("Datos invalidos");
         return error(HttpStatus.BAD_REQUEST, msg);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> unreadable() {
+        return error(HttpStatus.BAD_REQUEST, "Formato JSON invalido");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
