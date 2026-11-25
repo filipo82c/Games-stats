@@ -4,9 +4,9 @@ spring:
 
   datasource:
     # stringtype=unspecified: permite guardar el embedding (String) en la columna vector(768)
-    url: jdbc:postgresql://localhost:5440/gamestats_rag?stringtype=unspecified
-    username: admin
-    password: admin123
+    url: ${DB_URL:jdbc:postgresql://localhost:5440/gamestats_rag?stringtype=unspecified}
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:admin123}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -28,16 +28,17 @@ spring:
       max-file-size: 20MB
       max-request-size: 25MB
 
+# Los valores salen de variables de entorno (ver .env.example); despues de ':' va el valor por defecto
 # Configuracion JWT (JSON Web Token para autenticacion)
 jwt:
-  secret: "clave-secreta-muy-larga-para-gamestats-rag-2024-videojuegos-rag-system"
-  expiration: 86400000  # 24 horas en milisegundos
+  secret: ${JWT_SECRET:clave-secreta-muy-larga-para-gamestats-rag-2024-videojuegos-rag-system}
+  expiration: ${JWT_EXPIRATION:86400000}  # 24 horas en milisegundos
 
 # Configuracion de Ollama (IA que corre localmente)
 ollama:
-  base-url: http://localhost:11434
-  embedding-model: nomic-embed-text   # Modelo para convertir texto a vectores
-  llm-model: llama3.2:3b              # Modelo de lenguaje para generar respuestas
+  base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+  embedding-model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}   # Modelo para convertir texto a vectores
+  llm-model: ${OLLAMA_LLM_MODEL:llama3.2:3b}              # Modelo de lenguaje para generar respuestas
 
 # Configuracion de la aplicacion
 app:
