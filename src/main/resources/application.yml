@@ -50,6 +50,11 @@ app:
     chunk-overlap: 100                 # Palabras de solapamiento entre fragmentos
   rag:
     top-k: 5                           # Cuantos fragmentos recuperar por consulta
+    # Similitud coseno minima (0 a 1) para aceptar un fragmento como fuente.
+    # 0.40 es un valor inicial: descarta textos sin relacion con la pregunta.
+    # Se calibra con las preguntas de prueba mirando la similitud guardada en el historial
+    # (GET /api/consultas/{id}). Se cambia sin recompilar con la variable RAG_MIN_SIMILARITY.
+    min-similarity: ${RAG_MIN_SIMILARITY:0.40}
 
 server:
   port: 8080
