@@ -40,6 +40,10 @@ public class RagQueryService {
     @Value("${app.rag.top-k}")
     private int topK;
 
+    // Similitud minima para usar un fragmento como fuente (ver application.yml)
+    @Value("${app.rag.min-similarity:0.40}")
+    private double minSimilarity;
+
     public QueryResponse ask(String question, User user) {
         long start = System.currentTimeMillis();
 
@@ -55,24 +59,23 @@ public class RagQueryService {
         try {
             // Pasos 1 y 2: embedding de la pregunta + busqueda semantica con similitud
             String queryEmbedding = embeddingService.embed(question);
-            List<Object[]> rows = chunkRepository.findSimilarChunkIdsWithSimilarity(
+            List<Object[]> candidatos = chunkRepository.findSimilarChunkIdsWithSimilarity(
                     user.getId(), queryEmbedding, topK);
 
+            if (candidatos.isEmpty()) {
+                return responderSinResultados(consulta, question,
+                        "No tienes documentos indexados todavia. Sube un PDF de un videojuego para empezar.", start);
+            }
+
+            // UMBRAL: descartar fragmentos poco parecidos. Si ninguno lo supera,
+            // NO se llama al LLM: asi es imposible que invente una respuesta.
+            List<Object[]> rows = candidatos.stream()
+                    .filter(r -> ((Number) r[1]).doubleValue() >= minSimilarity)
+                    .toList();
+
             if (rows.isEmpty()) {
-                long elapsed = System.currentTimeMillis() - start;
-                String msg = "No tienes documentos indexados todavia. Sube un PDF de un videojuego para empezar.";
-                consulta.setEstado(EstadoConsulta.SIN_RESULTADOS);
-                consultaRepository.save(consulta);
-
-                RespuestaIA respuesta = respuestaRepository.save(RespuestaIA.builder()
-                        .consulta(consulta)
-                        .respuesta(msg)
-                        .tiempoRespuestaMs(elapsed)
-                        .build());
-
-                return new QueryResponse(
-                        consulta.getId(), respuesta.getId(), consulta.getEstado().name(),
-                        question, msg, List.of(), elapsed);
+                return responderSinResultados(consulta, question,
+                        "No encontre esa informacion en tus documentos.", start);
             }
 
             // Cargar los fragmentos junto con su documento manteniendo el orden de similitud
@@ -163,6 +166,23 @@ public class RagQueryService {
             consultaRepository.save(consulta);
             throw e;
         }
+    }
+
+    /** Guarda la consulta como SIN_RESULTADOS con un mensaje fijo, sin llamar al LLM. */
+    private QueryResponse responderSinResultados(ConsultaIA consulta, String question, String msg, long start) {
+        long elapsed = System.currentTimeMillis() - start;
+        consulta.setEstado(EstadoConsulta.SIN_RESULTADOS);
+        consultaRepository.save(consulta);
+
+        RespuestaIA respuesta = respuestaRepository.save(RespuestaIA.builder()
+                .consulta(consulta)
+                .respuesta(msg)
+                .tiempoRespuestaMs(elapsed)
+                .build());
+
+        return new QueryResponse(
+                consulta.getId(), respuesta.getId(), consulta.getEstado().name(),
+                question, msg, List.of(), elapsed);
     }
 
     private double clampSimilarity(double value) {
