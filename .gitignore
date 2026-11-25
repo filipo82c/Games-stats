@@ -5,3 +5,5 @@ temp-uploads/
 .vscode/
 .DS_Store
 *.log
+.env
+*.ipynb
