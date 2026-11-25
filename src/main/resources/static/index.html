@@ -124,6 +124,51 @@
     .ask { display: flex; gap: .7rem; margin-top: 1rem; }
     .ask textarea { resize: none; height: 54px; }
 
+    /* ---------- NAVEGACION ---------- */
+    .nav { display: flex; gap: .4rem; background: hsl(240 25% 8%); padding: .3rem; border-radius: 12px; }
+    .nav button { background: transparent; box-shadow: none; color: var(--muted); padding: .55rem 1rem; }
+    .nav button.active { background: hsl(268 60% 40% / .5); color: var(--text); }
+    .nav button:hover:not(.active) { transform: none; box-shadow: none; color: var(--text); }
+    .page { padding: 1.5rem 2rem; max-width: 1400px; margin: auto; display: flex; flex-direction: column; gap: 1.5rem; }
+    select { font: inherit; padding: .85rem 1rem; border-radius: 12px; color: var(--text); background: hsl(240 25% 8% / .8);
+      border: 1px solid var(--border); outline: none; width: 100%; }
+    .filters { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-end; }
+    .filters > div { min-width: 170px; }
+
+    /* Estados de consulta */
+    .badge.RESPONDIDA { background: hsl(150 70% 50% / .15); color: var(--ok); }
+    .badge.SIN_RESULTADOS { background: hsl(40 95% 60% / .15); color: var(--warn); }
+    .badge.PENDIENTE { background: hsl(188 95% 55% / .15); color: var(--accent2); }
+    .sim { font-family: 'JetBrains Mono', monospace; font-size: .75rem; color: var(--ok); margin-left: .4rem; }
+
+    /* Calificacion con estrellas */
+    .rate { margin-top: .7rem; display: flex; align-items: center; gap: .15rem; white-space: normal; font-size: .8rem; color: var(--muted); }
+    .rate .star { background: transparent; box-shadow: none; padding: 0 .1rem; font-size: 1.25rem; color: hsl(240 10% 35%); }
+    .rate .star.on { color: var(--warn); }
+    .rate .star:hover { transform: scale(1.2); box-shadow: none; }
+
+    /* Historial */
+    .hist-list { display: flex; flex-direction: column; gap: .8rem; }
+    .hist { padding: 1.1rem 1.3rem; }
+    .hist-top { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+    .hist-q { font-weight: 600; }
+    .hist-a { color: var(--muted); margin-top: .5rem; white-space: pre-wrap; line-height: 1.5; }
+
+    /* Dashboard */
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; }
+    .kpi { padding: 1.1rem 1.2rem; }
+    .kpi .v { font-size: 1.9rem; font-weight: 800; margin-top: .2rem; }
+    .kpi .l { color: var(--muted); font-size: .85rem; }
+    .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1rem; }
+    @media (max-width: 960px) { .charts { grid-template-columns: 1fr; } }
+    .chart-box { padding: 1.2rem; }
+    .chart-box h3 { font-size: 1rem; margin-bottom: .8rem; }
+    .chart-box canvas { max-height: 280px; }
+    table.t { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    table.t th { text-align: left; color: var(--muted); font-weight: 600; padding: .5rem; border-bottom: 1px solid var(--border); }
+    table.t td { padding: .5rem; border-bottom: 1px solid hsl(260 40% 60% / .08); }
+    .note { color: var(--muted); font-size: .82rem; }
+
     .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: .9rem 1.2rem; border-radius: 12px; z-index: 50; animation: rise .3s; max-width: 360px; }
     .toast.err { border-color: var(--err); } .toast.ok { border-color: var(--ok); }
   </style>
@@ -153,6 +198,11 @@
 <section id="app-view" class="hidden">
   <header>
     <div class="logo"><span class="grad">GameStats</span> AI</div>
+    <nav class="nav" id="nav">
+      <button type="button" class="active" data-view="chat">💬 Chat</button>
+      <button type="button" data-view="historial">🕘 Historial</button>
+      <button type="button" data-view="dashboard">📊 Dashboard</button>
+    </nav>
     <div class="user-chip">
       <div class="avatar" id="avatar">?</div>
       <span id="user-name"></span>
@@ -160,7 +210,7 @@
     </div>
   </header>
 
-  <main>
+  <main id="view-chat" class="view">
     <!-- Documentos -->
     <aside class="panel glass">
       <h2>📚 Mis documentos</h2>
@@ -172,7 +222,7 @@
       </div>
       <div class="row">
         <input id="doc-name" placeholder="Nombre (opcional)">
-        <input id="game-name" placeholder="Juego (ej: Valorant)">
+        <select id="juego-select" title="Juego al que pertenece el PDF"><option value="">Sin juego</option></select>
       </div>
       <button id="upload-btn" type="button" disabled>Subir e indexar</button>
       <ul class="doc-list" id="doc-list"></ul>
@@ -198,7 +248,52 @@
       </form>
     </section>
   </main>
+
+  <!-- ================= HISTORIAL ================= -->
+  <section id="view-historial" class="view page hidden">
+    <div class="panel glass">
+      <h2>🕘 Historial de consultas</h2>
+      <div class="filters">
+        <div><label for="hist-estado">Estado</label>
+          <select id="hist-estado">
+            <option value="">Todos</option>
+            <option value="RESPONDIDA">Respondida</option>
+            <option value="SIN_RESULTADOS">Sin resultados</option>
+            <option value="ERROR">Error</option>
+            <option value="PENDIENTE">Pendiente</option>
+          </select></div>
+        <button type="button" class="btn-ghost" id="hist-refresh">Actualizar</button>
+      </div>
+    </div>
+    <div class="hist-list" id="hist-list"></div>
+  </section>
+
+  <!-- ================= DASHBOARD ================= -->
+  <section id="view-dashboard" class="view page hidden">
+    <div class="panel glass">
+      <h2>📊 Dashboard analítico</h2>
+      <p class="note">Todos los números salen de consultas SQL a la base de datos (ver <code>docs/consultas_dashboard.sql</code>), no de la IA.</p>
+      <div class="filters" style="margin-top:1rem">
+        <div><label for="dash-desde">Desde</label><input type="date" id="dash-desde"></div>
+        <div><label for="dash-hasta">Hasta</label><input type="date" id="dash-hasta"></div>
+        <div><label for="dash-juego">Juego</label><select id="dash-juego"><option value="">Todos</option></select></div>
+        <button type="button" id="dash-apply">Aplicar filtros</button>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="charts">
+      <div class="chart-box glass"><h3>Consultas por día</h3><canvas id="ch-dia"></canvas></div>
+      <div class="chart-box glass"><h3>Distribución por estado</h3><canvas id="ch-estado"></canvas></div>
+      <div class="chart-box glass"><h3>Evolución semanal</h3><canvas id="ch-semana"></canvas></div>
+      <div class="chart-box glass"><h3>Calificaciones (1 a 5)</h3><canvas id="ch-cal"></canvas></div>
+      <div class="chart-box glass"><h3>Juegos más consultados</h3><div id="tb-juegos"></div></div>
+      <div class="chart-box glass"><h3>Documentos más citados</h3><div id="tb-docs"></div></div>
+    </div>
+  </section>
 </section>
+
+<!-- Chart.js para los graficos del dashboard (si no carga, se muestran solo tablas y tarjetas) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <script>
   // Si el HTML se abre desde Spring usa el mismo origen; si se abre como archivo usa localhost:8080
@@ -267,7 +362,9 @@
     $('user-name').textContent = name;
     $('avatar').textContent = name[0].toUpperCase();
     $('auth-view').classList.add('hidden'); $('app-view').classList.remove('hidden');
+    showView('chat');
     loadDocs();
+    loadJuegos();
   }
 
   // ---------- Documentos ----------
@@ -289,12 +386,16 @@
     const fd = new FormData();
     fd.append('file', selectedFile);
     fd.append('name', $('doc-name').value);
-    fd.append('gameName', $('game-name').value);
+    const sel = $('juego-select');
+    if (sel.value) {
+      fd.append('juegoId', sel.value);
+      fd.append('gameName', sel.options[sel.selectedIndex].text);
+    }
     $('upload-btn').disabled = true; $('upload-btn').textContent = 'Subiendo…';
     try {
       await api('/api/documents', { method: 'POST', body: fd });
       toast('PDF recibido. Indexando en segundo plano…');
-      selectedFile = null; $('file-input').value = ''; $('doc-name').value = ''; $('game-name').value = '';
+      selectedFile = null; $('file-input').value = ''; $('doc-name').value = ''; $('juego-select').value = '';
       $('drop-text').textContent = 'Arrastra un PDF o haz clic';
       loadDocs();
     } catch (err) { toast(err.message, 'err'); $('upload-btn').disabled = false; }
@@ -347,9 +448,11 @@
       const r = await api('/api/query', { method: 'POST', body: JSON.stringify({ question }) });
       const answer = esc(r.answer).replace(/\[(\d+)\]/g, '<span class="cite">[$1]</span>');
       const sources = r.sources.length ? `<details class="sources"><summary>📎 ${r.sources.length} fuentes consultadas</summary>
-        ${r.sources.map(s => `<div class="source"><b>[${s.number}]</b> ${esc(s.documentName)}${s.gameName ? ' · ' + esc(s.gameName) : ''} · pág. ${s.pageNumber}
+        ${r.sources.map(s => `<div class="source"><b>[${s.number}]</b> ${esc(s.documentName)}${s.gameName ? ' · ' + esc(s.gameName) : ''} · pág. ${s.pageNumber}${simTxt(s.similarity)}
         <p>${esc(s.excerpt)}</p></div>`).join('')}</details>` : '';
-      wait.innerHTML = answer + sources + `<div class="time">⚡ ${(r.responseTimeMs / 1000).toFixed(1)} s</div>`;
+      wait.innerHTML = answer + sources +
+        `<div class="time">⚡ ${(r.responseTimeMs / 1000).toFixed(1)} s · <span class="badge ${r.estado}">${ESTADOS[r.estado] || r.estado}</span></div>`;
+      if (r.respuestaId) wait.appendChild(starsWidget(r.respuestaId, null));
     } catch (err) {
       wait.innerHTML = '<span style="color:var(--err)">⚠ ' + esc(err.message) + '</span>';
     } finally { $('ask-btn').disabled = false; $('messages').scrollTop = $('messages').scrollHeight; }
@@ -358,6 +461,152 @@
   $('ask-form').onsubmit = (e) => { e.preventDefault(); const q = $('question').value; $('question').value = ''; ask(q); };
   $('question').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('ask-form').requestSubmit(); } };
   document.querySelectorAll('.chip').forEach(c => c.onclick = () => ask(c.textContent));
+
+  // ---------- Navegacion entre vistas ----------
+  const ESTADOS = { RESPONDIDA: 'RESPONDIDA', SIN_RESULTADOS: 'SIN RESULTADOS', ERROR: 'ERROR', PENDIENTE: 'PENDIENTE' };
+  const simTxt = (v) => v == null ? '' : `<span class="sim">similitud ${(v * 100).toFixed(1)}%</span>`;
+
+  function showView(v) {
+    document.querySelectorAll('.view').forEach(el => el.classList.add('hidden'));
+    $('view-' + v).classList.remove('hidden');
+    document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+    if (v === 'historial') loadHistorial();
+    if (v === 'dashboard') loadDashboard();
+  }
+  document.querySelectorAll('#nav button').forEach(b => b.onclick = () => showView(b.dataset.view));
+
+  // ---------- Juegos (selector al subir PDF y filtro del dashboard) ----------
+  async function loadJuegos() {
+    try {
+      const juegos = await api('/api/juegos');
+      for (const id of ['juego-select', 'dash-juego']) {
+        const sel = $(id);
+        const first = sel.options[0].outerHTML;
+        sel.innerHTML = first + juegos.map(j => `<option value="${j.id}">${esc(j.nombre)}</option>`).join('');
+      }
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  // ---------- Calificacion 1 a 5 ----------
+  function starsWidget(respuestaId, actual) {
+    const box = document.createElement('div');
+    box.className = 'rate';
+    let valor = actual;
+    const pintar = () => box.querySelectorAll('.star').forEach((st, i) => st.classList.toggle('on', valor && i < valor));
+    box.innerHTML = '<span>¿Te sirvió?</span>' +
+      [1, 2, 3, 4, 5].map(n => `<button type="button" class="star" title="${n} de 5">★</button>`).join('');
+    box.querySelectorAll('.star').forEach((st, i) => st.onclick = async () => {
+      const body = JSON.stringify({ puntuacion: i + 1 });
+      const url = `/api/respuestas/${respuestaId}/calificacion`;
+      try {
+        // Primera vez POST; si ya estaba calificada, se actualiza con PUT
+        if (valor) await api(url, { method: 'PUT', body });
+        else await api(url, { method: 'POST', body });
+        valor = i + 1; pintar(); toast('Calificación guardada: ' + valor + '/5');
+      } catch (err) { toast(err.message, 'err'); }
+    });
+    pintar();
+    return box;
+  }
+
+  // ---------- Historial ----------
+  $('hist-estado').onchange = () => loadHistorial();
+  $('hist-refresh').onclick = () => loadHistorial();
+
+  async function loadHistorial() {
+    const estado = $('hist-estado').value;
+    const list = $('hist-list');
+    try {
+      const items = await api('/api/consultas' + (estado ? '?estado=' + estado : ''));
+      list.innerHTML = items.length ? '' : '<div class="panel glass empty">No hay consultas con ese filtro.</div>';
+      for (const c of items) {
+        const r = c.respuesta;
+        const card = document.createElement('div');
+        card.className = 'hist glass';
+        const fuentes = r && r.fuentes.length
+          ? `<details class="sources"><summary>📎 ${r.fuentes.length} fuentes</summary>${r.fuentes.map(f =>
+              `<div class="source"><b>[${f.posicion}]</b> ${esc(f.documentoNombre)} · pág. ${f.pagina ?? '-'}${simTxt(f.similitud)}</div>`).join('')}</details>`
+          : '';
+        card.innerHTML = `<div class="hist-top">
+            <div class="hist-q">${esc(c.pregunta)}</div>
+            <div style="display:flex;gap:.4rem;align-items:center">
+              <span class="badge ${c.estado}">${ESTADOS[c.estado] || c.estado}</span>
+              <button class="del" title="Eliminar del historial" type="button">✕</button>
+            </div></div>
+          <div class="time">${new Date(c.createdAt).toLocaleString('es-CO')}${r && r.tiempoRespuestaMs != null ? ' · ⚡ ' + (r.tiempoRespuestaMs / 1000).toFixed(1) + ' s' : ''}</div>
+          ${r ? `<div class="hist-a">${esc(r.respuesta)}</div>` : ''}
+          ${c.mensajeError ? `<div class="hist-a" style="color:var(--err)">⚠ ${esc(c.mensajeError)}</div>` : ''}
+          ${fuentes}`;
+        if (r) card.appendChild(starsWidget(r.id, r.calificacion ? r.calificacion.puntuacion : null));
+        card.querySelector('.del').onclick = async () => {
+          if (!confirm('¿Eliminar esta consulta del historial?')) return;
+          await api('/api/consultas/' + c.id, { method: 'DELETE' }).catch(e => toast(e.message, 'err'));
+          loadHistorial();
+        };
+        list.appendChild(card);
+      }
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  // ---------- Dashboard ----------
+  const charts = {};
+  $('dash-apply').onclick = () => loadDashboard();
+
+  function grafico(id, config) {
+    if (typeof Chart === 'undefined') return; // sin internet: solo tarjetas y tablas
+    charts[id]?.destroy();
+    Chart.defaults.color = '#a3a3b8';
+    Chart.defaults.borderColor = 'rgba(160,140,220,.15)';
+    charts[id] = new Chart($(id), config);
+  }
+  const fmt = (v, suf = '') => v == null ? '—' : v.toLocaleString('es-CO') + suf;
+
+  async function loadDashboard() {
+    const q = new URLSearchParams();
+    if ($('dash-desde').value) q.set('desde', $('dash-desde').value);
+    if ($('dash-hasta').value) q.set('hasta', $('dash-hasta').value);
+    if ($('dash-juego').value) q.set('juegoId', $('dash-juego').value);
+    try {
+      const d = await api('/api/dashboard?' + q);
+      // Mostrar en los filtros las fechas que uso el servidor (por defecto, ultimos 30 dias)
+      $('dash-desde').value = d.filtros.desde; $('dash-hasta').value = d.filtros.hasta;
+      const r = d.resumen;
+      const kpis = [
+        ['Consultas', fmt(r.totalConsultas)],
+        ['Tasa de respuesta', fmt(r.tasaRespuesta, '%')],
+        ['Sin resultados', fmt(r.sinResultados)],
+        ['Errores', fmt(r.errores)],
+        ['Tiempo promedio', r.tiempoPromedioMs == null ? '—' : (r.tiempoPromedioMs / 1000).toFixed(1) + ' s'],
+        ['Calificación promedio', r.calificacionPromedio == null ? '—' : r.calificacionPromedio.toFixed(2) + ' / 5'],
+        ['Similitud promedio', r.similitudPromedio == null ? '—' : (r.similitudPromedio * 100).toFixed(1) + '%'],
+        ['Documentos listos', fmt(r.documentosListos)],
+      ];
+      $('kpis').innerHTML = kpis.map(([l, v]) => `<div class="kpi glass"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('');
+
+      grafico('ch-dia', { type: 'line', data: { labels: d.porDia.map(x => x.fecha.slice(5)), datasets: [
+        { label: 'Total', data: d.porDia.map(x => x.total), borderColor: '#a855f7', backgroundColor: 'rgba(168,85,247,.2)', fill: true, tension: .3 },
+        { label: 'Respondidas', data: d.porDia.map(x => x.respondidas), borderColor: '#34d399', tension: .3 },
+        { label: 'Sin resultados', data: d.porDia.map(x => x.sinResultados), borderColor: '#fbbf24', tension: .3 } ] },
+        options: { scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+      grafico('ch-estado', { type: 'doughnut', data: { labels: d.porEstado.map(x => `${ESTADOS[x.estado] || x.estado} (${x.porcentaje}%)`),
+        datasets: [{ data: d.porEstado.map(x => x.total), backgroundColor: d.porEstado.map(x =>
+          ({ RESPONDIDA: '#34d399', SIN_RESULTADOS: '#fbbf24', ERROR: '#f43f5e', PENDIENTE: '#22d3ee' }[x.estado])) }] } });
+      grafico('ch-semana', { type: 'bar', data: { labels: d.porSemana.map(x => 'Sem. ' + x.semana.slice(5)), datasets: [
+        { label: 'Total', data: d.porSemana.map(x => x.total), backgroundColor: '#a855f7' },
+        { label: 'Respondidas', data: d.porSemana.map(x => x.respondidas), backgroundColor: '#34d399' } ] },
+        options: { scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+      grafico('ch-cal', { type: 'bar', data: { labels: d.calificaciones.map(x => x.puntuacion + ' ★'),
+        datasets: [{ label: 'Respuestas', data: d.calificaciones.map(x => x.total), backgroundColor: '#fbbf24' }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+
+      const tabla = (cols, filas) => filas.length
+        ? `<table class="t"><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>${filas.map(f => `<tr>${f.map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}</table>`
+        : '<p class="empty">Sin datos en este rango.</p>';
+      $('tb-juegos').innerHTML = tabla(['Juego', 'Consultas'], d.topJuegos.map(j => [esc(j.juego), j.consultas]));
+      $('tb-docs').innerHTML = tabla(['Documento', 'Veces citado', 'Similitud prom.'],
+        d.topDocumentos.map(x => [esc(x.documento), x.vecesCitado, x.similitudPromedio == null ? '—' : (x.similitudPromedio * 100).toFixed(1) + '%']));
+    } catch (err) { toast(err.message, 'err'); }
+  }
 
   // Si ya hay sesión guardada, entrar directo
   if (token()) showApp();
