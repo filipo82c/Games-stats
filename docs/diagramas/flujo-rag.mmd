@@ -1,0 +1,27 @@
+sequenceDiagram
+    autonumber
+    actor U as Usuario
+    participant FE as Frontend
+    participant API as RagQueryService
+    participant OL as Ollama
+    participant DB as PostgreSQL + pgvector
+
+    U->>FE: Escribe la pregunta
+    FE->>API: POST /api/query (JWT)
+    API->>DB: Guarda ConsultaIA (PENDIENTE)
+    API->>OL: Embedding de la pregunta
+    OL-->>API: Vector de 768 numeros
+    API->>DB: Top-5 fragmentos del usuario por distancia coseno
+    DB-->>API: Fragmentos + similitud
+    alt Ninguno supera la similitud minima (0.40)
+        API->>DB: Estado SIN_RESULTADOS (no se llama al LLM)
+        API-->>FE: "No encontre esa informacion en tus documentos"
+    else Hay fragmentos relevantes
+        API->>OL: Prompt con fragmentos numerados [1]..[5]
+        OL-->>API: Respuesta con citas
+        API->>DB: Guarda RespuestaIA + FuenteRespuesta, estado RESPONDIDA
+        API-->>FE: Respuesta + fuentes + similitud + tiempo
+    end
+    Note over API,DB: Si Ollama falla: estado ERROR con su mensaje
+    U->>FE: Califica de 1 a 5
+    FE->>API: POST /api/respuestas/{id}/calificacion
