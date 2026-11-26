@@ -25,6 +25,9 @@ Este documento explica qué herramientas de IA usé en el proyecto, en qué part
 | PDF de demo "Ecos de Valdoria 4.7" y preguntas de prueba | Claude | Patch notes ficticias con números verificables |
 | Modelo de datos ampliado (8 entidades) | Claude, a partir de los requisitos del enunciado | `Juego`, `ConsultaIA`, `EstadoConsulta`, `RespuestaIA`, `FuenteRespuesta`, `Calificacion`, relación `Document → Juego`, migraciones V4–V6 y 5 repositorios |
 | Conexión de las entidades con `RagQueryService` y endpoints de historial, calificación y juegos | Antigravity | Persistencia de `ConsultaIA`, `RespuestaIA` y `FuenteRespuesta` con similitud y estados; endpoints `/api/juegos`, `/api/consultas` y `/api/respuestas/{id}/calificacion` |
+| Umbral de similitud configurable (`app.rag.min-similarity`) | Claude | Si ningún fragmento supera el umbral, no se llama al LLM y la consulta queda `SIN_RESULTADOS` |
+| Dashboard analítico (backend) | Claude | `DashboardService` con consultas SQL, `DashboardController`, `DashboardResponse`, `docs/consultas_dashboard.sql`; consultas probadas en PostgreSQL con datos de ejemplo |
+| Frontend: historial, calificación con estrellas, selector de juego y dashboard con gráficos | Claude | `index.html` (Chart.js por CDN) |
 | Colección de Postman, `.env.example`, script de datos iniciales | Claude | Carpeta `postman/`, archivo `.env.example`, `database/datos_iniciales.sql` |
 | Variables de entorno en `application.yml` | Claude | Las credenciales se leen de variables de entorno, con valores por defecto para desarrollo |
 | Presentación (10 diapositivas con notas) | Claude | [Indicar cambios que hice yo] |
@@ -40,7 +43,9 @@ Este documento explica qué herramientas de IA usé en el proyecto, en qué part
 5. **Índice HNSW con distancia coseno**: búsqueda rápida de los fragmentos más parecidos.
 6. **Copia del nombre del documento en `FuenteRespuesta`**: si se borra un PDF, el historial de respuestas no pierde la referencia.
 7. **`CHECK` en la base de datos** para los 4 estados de consulta y para la calificación de 1 a 5: la regla se cumple aunque haya un error en el código.
-8. **Relaciones excluidas de `equals`/`hashCode`** en las entidades con Lombok `@Data`, para evitar recursión infinita entre entidades relacionadas.
+8. **Umbral de similitud antes de llamar al LLM**: además de la regla del prompt, si ningún fragmento es parecido la IA ni siquiera recibe la pregunta, así no puede inventar.
+9. **Indicadores del dashboard calculados en SQL** (no por la IA), con un filtro común (CTE) por usuario, fechas y juego.
+10. **Relaciones excluidas de `equals`/`hashCode`** en las entidades con Lombok `@Data`, para evitar recursión infinita entre entidades relacionadas.
 
 ## 4. Cómo verifiqué lo que generó la IA
 

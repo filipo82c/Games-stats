@@ -50,6 +50,21 @@ mvn spring-boot:run
 
 Abrir **http://localhost:8080** → registrarse → subir un PDF → preguntar.
 
+**Datos iniciales** (usuario `demo` / `demo1234` y 5 juegos), después de arrancar la app una vez:
+
+```powershell
+# Windows (PowerShell)
+Get-Content database\datos_iniciales.sql | docker exec -i gamestats-db psql -U admin -d gamestats_rag
+```
+```bash
+# Linux / macOS
+docker exec -i gamestats-db psql -U admin -d gamestats_rag < database/datos_iniciales.sql
+```
+
+**Configuración:** las credenciales se leen de variables de entorno (ver `.env.example`). Si no existen, se usan los valores de desarrollo de `application.yml`.
+
+**Postman:** importar `postman/GameStats_AI.postman_collection.json` y ejecutar primero *Login* (guarda el token automáticamente).
+
 ## 📡 API REST
 
 | Método | Endpoint | Auth | Descripción |
@@ -59,7 +74,20 @@ Abrir **http://localhost:8080** → registrarse → subir un PDF → preguntar.
 | POST | `/api/documents` | ✅ | Subir PDF (multipart: `file`, `name`, `gameName`) → 202 |
 | GET | `/api/documents` | ✅ | Listar mis documentos y su estado |
 | DELETE | `/api/documents/{id}` | ✅ | Eliminar documento y sus fragmentos |
-| POST | `/api/query` | ✅ | `{ "question": "..." }` → respuesta + fuentes |
+| POST | `/api/documents` (opcional `juegoId`) | ✅ | Asocia el PDF a un juego |
+| POST | `/api/query` | ✅ | `{ "question": "..." }` → respuesta + fuentes con similitud + estado |
+| GET | `/api/juegos` · `/api/juegos/{id}` | ✅ | Listar / ver juegos |
+| POST · PUT · DELETE | `/api/juegos` · `/api/juegos/{id}` | ✅ | Crear (201) / editar / eliminar juegos |
+| GET | `/api/consultas?estado=` | ✅ | Historial de consultas (filtro opcional por estado) |
+| GET · DELETE | `/api/consultas/{id}` | ✅ | Detalle con respuesta y fuentes / eliminar |
+| POST · PUT · GET · DELETE | `/api/respuestas/{id}/calificacion` | ✅ | Calificar una respuesta de 1 a 5 |
+| GET | `/api/dashboard?desde=&hasta=&juegoId=` | ✅ | Indicadores calculados con SQL (por defecto, últimos 30 días) |
+
+### Estados de una consulta
+`PENDIENTE` → `RESPONDIDA` · `SIN_RESULTADOS` (ningún fragmento supera la similitud mínima `app.rag.min-similarity`, o la IA no encontró el dato) · `ERROR` (falló Ollama u otro servicio).
+
+### Dashboard
+Todos los indicadores salen de consultas SQL (`DashboardService`). Las mismas consultas están en `docs/consultas_dashboard.sql` para comprobar los números a mano.
 
 Ejemplo:
 ```bash
