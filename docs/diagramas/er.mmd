@@ -1,0 +1,82 @@
+erDiagram
+    USERS ||--o{ DOCUMENTS : "sube"
+    USERS ||--o{ DOCUMENT_CHUNKS : "es duenio de"
+    USERS ||--o{ CONSULTAS_IA : "pregunta"
+    JUEGOS |o--o{ DOCUMENTS : "agrupa"
+    DOCUMENTS ||--o{ DOCUMENT_CHUNKS : "se divide en"
+    CONSULTAS_IA ||--o| RESPUESTAS_IA : "tiene"
+    RESPUESTAS_IA ||--o{ FUENTES_RESPUESTA : "cita"
+    DOCUMENT_CHUNKS |o--o{ FUENTES_RESPUESTA : "es usado como"
+    RESPUESTAS_IA ||--o| CALIFICACIONES : "recibe"
+
+    USERS {
+        bigint id PK
+        varchar username UK
+        varchar email UK
+        varchar password "BCrypt"
+        varchar role "USER o ADMIN"
+        timestamp created_at
+        timestamp updated_at
+    }
+    JUEGOS {
+        bigint id PK
+        varchar nombre UK
+        varchar genero
+        text descripcion
+        timestamp created_at
+    }
+    DOCUMENTS {
+        bigint id PK
+        bigint user_id FK
+        bigint juego_id FK "opcional"
+        varchar name
+        varchar original_filename
+        varchar file_hash "SHA-256"
+        varchar game_name
+        varchar status "PROCESSING READY ERROR"
+        int total_chunks
+        int total_pages
+        text error_message
+        timestamp created_at
+    }
+    DOCUMENT_CHUNKS {
+        bigint id PK
+        bigint document_id FK
+        bigint user_id FK
+        text content
+        vector embedding "768 dims, indice HNSW"
+        int page_number
+        int chunk_index
+        varchar embedding_model
+    }
+    CONSULTAS_IA {
+        bigint id PK
+        bigint user_id FK
+        text pregunta
+        varchar estado "PENDIENTE RESPONDIDA SIN_RESULTADOS ERROR"
+        text mensaje_error
+        timestamp created_at
+    }
+    RESPUESTAS_IA {
+        bigint id PK
+        bigint consulta_id FK "UNIQUE"
+        text respuesta
+        bigint tiempo_respuesta_ms
+        timestamp created_at
+    }
+    FUENTES_RESPUESTA {
+        bigint id PK
+        bigint respuesta_id FK
+        bigint fragmento_id FK "SET NULL"
+        varchar documento_nombre
+        int pagina
+        double similitud
+        int posicion
+    }
+    CALIFICACIONES {
+        bigint id PK
+        bigint respuesta_id FK "UNIQUE"
+        smallint puntuacion "CHECK 1 a 5"
+        text comentario
+        timestamp created_at
+    }

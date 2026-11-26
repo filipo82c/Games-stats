@@ -1,0 +1,14 @@
+flowchart LR
+    U(["Usuario<br/>navegador"]) --> FE["Frontend<br/>index.html<br/>HTML + CSS + JS + Chart.js"]
+    FE -- "REST + JWT" --> SEC
+
+    subgraph SB["Backend Spring Boot 3.5 · Java 21"]
+        SEC["Spring Security<br/>JwtAuthFilter + BCrypt"] --> CTRL["Controllers<br/>Auth · Documentos · Query<br/>Juegos · Historial · Calificacion · Dashboard"]
+        CTRL --> SRV["Services<br/>PdfProcessor @Async · Chunking<br/>Embedding · RagQuery · OllamaLlm<br/>Historial · Dashboard"]
+        SRV --> REPO["Repositories<br/>Spring Data JPA + JdbcTemplate"]
+    end
+
+    REPO -- "JDBC :5440" --> DB[("PostgreSQL 16 + pgvector<br/>Docker · Flyway V1-V6<br/>8 tablas · indice HNSW")]
+    SRV -- "HTTP :11434<br/>/api/embeddings" --> EMB["Ollama<br/>nomic-embed-text<br/>768 dimensiones"]
+    SRV -- "HTTP :11434<br/>/api/generate" --> LLM["Ollama<br/>llama3.2:3b"]
+    PDF[/"PDF del usuario"/] -. "PDFBox" .-> SRV
